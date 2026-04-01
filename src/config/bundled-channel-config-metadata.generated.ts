@@ -9922,6 +9922,9 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
         name: {
           type: "string",
         },
+        systemPrompt: {
+          type: "string",
+        },
         mode: {
           default: "socket",
           type: "string",
@@ -10624,6 +10627,9 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                 },
               ],
             },
+            systemPrompt: {
+              type: "string",
+            },
           },
           additionalProperties: false,
         },
@@ -10769,6 +10775,9 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
             type: "object",
             properties: {
               name: {
+                type: "string",
+              },
+              systemPrompt: {
                 type: "string",
               },
               mode: {
@@ -11469,6 +11478,9 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                         const: "all",
                       },
                     ],
+                  },
+                  systemPrompt: {
+                    type: "string",
                   },
                 },
                 additionalProperties: false,

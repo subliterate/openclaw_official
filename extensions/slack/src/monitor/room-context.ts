@@ -4,23 +4,26 @@ export function resolveSlackRoomContextHints(params: {
   isRoomish: boolean;
   channelInfo?: { topic?: string; purpose?: string };
   channelConfig?: { systemPrompt?: string | null } | null;
+  globalSystemPrompt?: string | null;
+  dmSystemPrompt?: string | null;
+  applyDmSystemPrompt?: boolean;
 }): {
   untrustedChannelMetadata?: ReturnType<typeof buildUntrustedChannelMetadata>;
   groupSystemPrompt?: string;
 } {
-  if (!params.isRoomish) {
-    return {};
-  }
+  const untrustedChannelMetadata = params.isRoomish
+    ? buildUntrustedChannelMetadata({
+        source: "slack",
+        label: "Slack channel description",
+        entries: [params.channelInfo?.topic, params.channelInfo?.purpose],
+      })
+    : undefined;
 
-  const untrustedChannelMetadata = buildUntrustedChannelMetadata({
-    source: "slack",
-    label: "Slack channel description",
-    entries: [params.channelInfo?.topic, params.channelInfo?.purpose],
-  });
-
-  const systemPromptParts = [params.channelConfig?.systemPrompt?.trim() || null].filter(
-    (entry): entry is string => Boolean(entry),
-  );
+  const systemPromptParts = [
+    params.globalSystemPrompt?.trim() || null,
+    params.isRoomish ? params.channelConfig?.systemPrompt?.trim() || null : null,
+    params.applyDmSystemPrompt ? params.dmSystemPrompt?.trim() || null : null,
+  ].filter((entry): entry is string => Boolean(entry));
   const groupSystemPrompt =
     systemPromptParts.length > 0 ? systemPromptParts.join("\n\n") : undefined;
 
