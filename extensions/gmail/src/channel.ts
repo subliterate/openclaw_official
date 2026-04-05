@@ -6,8 +6,7 @@ import {
   resolveDefaultGmailAccountId,
   resolveGmailAccount,
 } from "./accounts.js";
-// Actions disabled: upstream ChannelMessageActionAdapter API changed (describeMessageTool).
-// import { gmailActions } from "./actions.js";
+import { gmailActions } from "./actions.js";
 import { probeGmail } from "./api.js";
 import { GmailConfigSchema } from "./config-schema.js";
 import { handleGmailInbound } from "./inbound.js";
@@ -92,6 +91,7 @@ export const gmailPlugin: ChannelPlugin<ResolvedGmailAccount, GmailProbe> = {
   capabilities: { chatTypes: ["direct"], media: false },
   reload: { configPrefixes: ["channels.gmail"] },
   configSchema: buildChannelConfigSchema(GmailConfigSchema),
+  actions: gmailActions,
 
   config: {
     listAccountIds: (cfg) => listGmailAccountIds(cfg as CoreConfig),

@@ -1,10 +1,23 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
+import type {
+  ChannelMessageActionAdapter,
+  ChannelMessageActionName,
+  OpenClawConfig,
+} from "openclaw/plugin-sdk";
+import { resolveGmailAccount } from "./accounts.js";
+import { getMessage, listLabels, listMessages } from "./api.js";
+import type { GmailConfig, ResolvedGmailAccount } from "./types.js";
 
-function createActionGate<T extends Record<string, boolean | undefined>>(
-  actions: T | undefined,
+type CoreConfig = OpenClawConfig & {
+  channels?: { gmail?: GmailConfig };
+};
+
+// ── Inlined tool helpers (not in public plugin SDK) ─────────────────
+
+function createActionGate(
+  actions: Record<string, boolean | undefined> | undefined,
 ): (key: string, defaultValue?: boolean) => boolean {
   return (key, defaultValue = true) => {
-    const value = actions?.[key as keyof T];
+    const value = actions?.[key];
     if (value === undefined) return defaultValue;
     return Boolean(value);
   };
@@ -36,15 +49,15 @@ function readNumberParam(
 }
 
 function jsonResult(payload: unknown) {
-  return { text: JSON.stringify(payload, null, 2), details: payload };
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
+    details: payload,
+  };
 }
-import { resolveGmailAccount } from "./accounts.js";
-import { getMessage, listLabels, listMessages } from "./api.js";
-import type { GmailConfig, ResolvedGmailAccount } from "./types.js";
 
-type CoreConfig = OpenClawConfig & {
-  channels?: { gmail?: GmailConfig };
-};
+// ── Constants ───────────────────────────────────────────────────────
+
+const SUPPORTED_ACTIONS = new Set<ChannelMessageActionName>(["search", "read", "channel-list"]);
 
 const VISIBLE_SYSTEM_LABELS = new Set([
   "INBOX",
@@ -57,41 +70,49 @@ const VISIBLE_SYSTEM_LABELS = new Set([
   "UNREAD",
 ]);
 
-// Actions are currently disabled: upstream ChannelMessageActionAdapter API
-// changed from listActions/handleAction to describeMessageTool in v2026.4.
-// These helper functions are preserved for future migration.
+// ── Action adapter ──────────────────────────────────────────────────
 
-export async function gmailActionSearch(
-  cfg: OpenClawConfig,
-  params: Record<string, unknown>,
-  accountId?: string,
-) {
-  const account = resolveGmailAccount({
-    cfg: cfg as CoreConfig,
-    accountId: accountId ?? undefined,
-  });
-  return handleSearch(account, params);
-}
+export const gmailActions: ChannelMessageActionAdapter = {
+  describeMessageTool: ({ cfg }) => {
+    const account = resolveGmailAccount({ cfg: cfg as CoreConfig });
+    if (!account.enabled || !account.configured) {
+      return null;
+    }
+    const gate = createActionGate(
+      (cfg as CoreConfig).channels?.gmail as unknown as Record<string, boolean | undefined>,
+    );
+    const actions: ChannelMessageActionName[] = [];
+    if (gate("search")) actions.push("search");
+    if (gate("read")) actions.push("read");
+    if (gate("channel-list")) actions.push("channel-list");
+    return { actions };
+  },
 
-export async function gmailActionRead(
-  cfg: OpenClawConfig,
-  params: Record<string, unknown>,
-  accountId?: string,
-) {
-  const account = resolveGmailAccount({
-    cfg: cfg as CoreConfig,
-    accountId: accountId ?? undefined,
-  });
-  return handleRead(account, params);
-}
+  supportsAction: ({ action }) => SUPPORTED_ACTIONS.has(action),
 
-export async function gmailActionChannelList(cfg: OpenClawConfig, accountId?: string) {
-  const account = resolveGmailAccount({
-    cfg: cfg as CoreConfig,
-    accountId: accountId ?? undefined,
-  });
-  return handleChannelList(account);
-}
+  extractToolSend: () => null,
+
+  handleAction: async ({ action, params, cfg, accountId }) => {
+    const account = resolveGmailAccount({
+      cfg: cfg as CoreConfig,
+      accountId: accountId ?? undefined,
+    });
+
+    if (action === "search") {
+      return handleSearch(account, params);
+    }
+    if (action === "read") {
+      return handleRead(account, params);
+    }
+    if (action === "channel-list") {
+      return handleChannelList(account);
+    }
+
+    throw new Error(`Action "${action}" is not supported by the Gmail extension.`);
+  },
+};
+
+// ── Action handlers ─────────────────────────────────────────────────
 
 async function handleSearch(account: ResolvedGmailAccount, params: Record<string, unknown>) {
   const query = readStringParam(params, "query", { required: true, label: "Gmail search query" })!;

@@ -1,5 +1,6 @@
+import type { OpenClawConfig } from "openclaw/plugin-sdk";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { gmailActionSearch, gmailActionRead, gmailActionChannelList } from "./actions.js";
+import { gmailActions } from "./actions.js";
 
 vi.mock("./accounts.js", () => ({
   resolveGmailAccount: vi.fn(({ cfg, accountId }) => {
@@ -46,7 +47,7 @@ vi.mock("./api.js", () => ({
   ]),
 }));
 
-const CONFIGURED_CFG = {
+const CONFIGURED_CFG: OpenClawConfig = {
   channels: {
     gmail: {
       enabled: true,
@@ -57,17 +58,64 @@ const CONFIGURED_CFG = {
   },
 };
 
-describe("gmail actions", () => {
+function makeCtx(action: string, params: Record<string, unknown> = {}) {
+  return {
+    channel: "gmail" as const,
+    action: action as any,
+    cfg: CONFIGURED_CFG,
+    params,
+    accountId: null,
+  };
+}
+
+describe("gmailActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe("search", () => {
+  describe("describeMessageTool", () => {
+    it("returns null when account is not enabled", () => {
+      const cfg: OpenClawConfig = {
+        channels: { gmail: { enabled: false } },
+      };
+      const result = gmailActions.describeMessageTool({ cfg });
+      expect(result).toBeNull();
+    });
+
+    it("returns null when account is not configured", () => {
+      const cfg: OpenClawConfig = {
+        channels: { gmail: { enabled: true } },
+      };
+      const result = gmailActions.describeMessageTool({ cfg });
+      expect(result).toBeNull();
+    });
+
+    it("returns search, read, and channel-list when configured", () => {
+      const result = gmailActions.describeMessageTool({ cfg: CONFIGURED_CFG });
+      expect(result?.actions).toContain("search");
+      expect(result?.actions).toContain("read");
+      expect(result?.actions).toContain("channel-list");
+    });
+  });
+
+  describe("supportsAction", () => {
+    it("returns true for supported actions", () => {
+      expect(gmailActions.supportsAction!({ action: "search" })).toBe(true);
+      expect(gmailActions.supportsAction!({ action: "read" })).toBe(true);
+      expect(gmailActions.supportsAction!({ action: "channel-list" })).toBe(true);
+    });
+
+    it("returns false for unsupported actions", () => {
+      expect(gmailActions.supportsAction!({ action: "react" })).toBe(false);
+      expect(gmailActions.supportsAction!({ action: "edit" })).toBe(false);
+    });
+  });
+
+  describe("handleAction — search", () => {
     it("searches messages and returns formatted results", async () => {
-      const result = await gmailActionSearch(CONFIGURED_CFG as any, {
-        query: "from:boss@co.com",
-        limit: 5,
-      });
+      const result = await gmailActions.handleAction!(
+        makeCtx("search", { query: "from:boss@co.com", limit: 5 }),
+      );
 
       const { listMessages } = await import("./api.js");
       expect(listMessages).toHaveBeenCalledWith(expect.objectContaining({ accountId: "default" }), {
@@ -88,7 +136,7 @@ describe("gmail actions", () => {
     });
 
     it("defaults limit to 10", async () => {
-      await gmailActionSearch(CONFIGURED_CFG as any, { query: "invoices" });
+      await gmailActions.handleAction!(makeCtx("search", { query: "invoices" }));
 
       const { listMessages } = await import("./api.js");
       expect(listMessages).toHaveBeenCalledWith(expect.anything(), {
@@ -98,9 +146,9 @@ describe("gmail actions", () => {
     });
   });
 
-  describe("read", () => {
+  describe("handleAction — read", () => {
     it("reads a single message by ID", async () => {
-      const result = await gmailActionRead(CONFIGURED_CFG as any, { messageId: "msg-42" });
+      const result = await gmailActions.handleAction!(makeCtx("read", { messageId: "msg-42" }));
 
       const { getMessage } = await import("./api.js");
       expect(getMessage).toHaveBeenCalledWith(
@@ -122,9 +170,9 @@ describe("gmail actions", () => {
     });
   });
 
-  describe("channel-list", () => {
+  describe("handleAction — channel-list", () => {
     it("returns filtered labels", async () => {
-      const result = await gmailActionChannelList(CONFIGURED_CFG as any);
+      const result = await gmailActions.handleAction!(makeCtx("channel-list"));
 
       expect(result.details).toEqual(
         expect.objectContaining({
@@ -141,6 +189,14 @@ describe("gmail actions", () => {
       // CATEGORY_PROMOTIONS is a system label not in the visible set
       const labels = (result.details as any).labels;
       expect(labels.find((l: any) => l.id === "CATEGORY_PROMOTIONS")).toBeUndefined();
+    });
+  });
+
+  describe("handleAction — unsupported", () => {
+    it("throws for unsupported action", async () => {
+      await expect(gmailActions.handleAction!(makeCtx("react"))).rejects.toThrow(
+        'Action "react" is not supported by the Gmail extension.',
+      );
     });
   });
 });
