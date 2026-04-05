@@ -1,0 +1,9 @@
+{
+  "id": "gmail",
+  "channels": ["gmail"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
