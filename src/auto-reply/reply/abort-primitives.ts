@@ -87,7 +87,11 @@ export function getAbortMemory(key: string): boolean | undefined {
   if (!normalized) {
     return undefined;
   }
-  return ABORT_MEMORY.get(normalized);
+  const value = ABORT_MEMORY.get(normalized);
+  if (value !== undefined) {
+    ABORT_MEMORY.delete(normalized);
+  }
+  return value;
 }
 
 function pruneAbortMemory(): void {
