@@ -16,13 +16,12 @@ export type GmailMonitorOptions = {
   onMessage?: (message: GmailInboundMessage, account: ResolvedGmailAccount) => Promise<void>;
 };
 
-/**
- * Polls Gmail for new messages and dispatches them to the handler.
- * Uses the Gmail History API with historyId tracking for incremental polling.
- */
-export async function monitorGmailProvider(
-  opts: GmailMonitorOptions,
-): Promise<{ stop: () => void }> {
+// Polls Gmail for new messages and dispatches them via the History API.
+// Returns a Promise that does NOT resolve until opts.abortSignal aborts.
+// The channel supervisor in src/gateway/server-channels.ts treats startAccount
+// resolving as "channel exited"; staying pending here is required for the
+// supervisor to keep the channel marked as running.
+export async function monitorGmailProvider(opts: GmailMonitorOptions): Promise<void> {
   const core = getGmailRuntime();
   const cfg = opts.config ?? (core.config.loadConfig() as CoreConfig);
   const account = resolveGmailAccount({ cfg, accountId: opts.accountId });
@@ -44,7 +43,6 @@ export async function monitorGmailProvider(
   let historyId = "";
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Initialize: get current historyId so we only see new messages.
   try {
     const profile = await getProfile(account);
     historyId = profile.historyId;
@@ -67,7 +65,6 @@ export async function monitorGmailProvider(
 
     try {
       if (!historyId) {
-        // No historyId — full sync not supported, just get current position.
         const profile = await getProfile(account);
         historyId = profile.historyId;
         return;
@@ -78,14 +75,12 @@ export async function monitorGmailProvider(
       if (result.latestHistoryId) {
         historyId = result.latestHistoryId;
       } else {
-        // historyId expired — reset by fetching current position.
         const profile = await getProfile(account);
         historyId = profile.historyId;
         logger.warn(`[gmail:${account.accountId}] historyId expired, reset to current`);
         return;
       }
 
-      // Fetch and dispatch new messages.
       const newIds = result.messageIds.filter((id) => !seenMessageIds.has(id));
       const fetchLimit = Math.min(newIds.length, maxResults);
 
@@ -97,7 +92,6 @@ export async function monitorGmailProvider(
           const message = await getMessage(account, id);
           seenMessageIds.add(id);
 
-          // Skip messages sent by ourselves.
           if (account.email && message.from === account.email.toLowerCase()) {
             continue;
           }
@@ -121,7 +115,6 @@ export async function monitorGmailProvider(
         }
       }
 
-      // Prevent unbounded growth of seen set.
       if (seenMessageIds.size > 5000) {
         const entries = [...seenMessageIds];
         const trimmed = entries.slice(entries.length - 2000);
@@ -141,11 +134,10 @@ export async function monitorGmailProvider(
     }
   }
 
-  // Start the first poll after a short delay to allow gateway startup.
   pollTimer = setTimeout(poll, 2000);
 
-  return {
-    stop: () => {
+  return new Promise<void>((resolve) => {
+    const stop = () => {
       stopped = true;
       if (pollTimer) {
         clearTimeout(pollTimer);
@@ -153,6 +145,13 @@ export async function monitorGmailProvider(
       }
       opts.statusSink?.({ running: false, lastStopAt: Date.now() });
       logger.info(`[gmail:${account.accountId}] monitoring stopped`);
-    },
-  };
+      resolve();
+    };
+
+    if (opts.abortSignal?.aborted) {
+      stop();
+      return;
+    }
+    opts.abortSignal?.addEventListener("abort", stop, { once: true });
+  });
 }

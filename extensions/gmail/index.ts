@@ -1,15 +1,16 @@
-import type { ChannelPlugin } from "openclaw/plugin-sdk/core";
-import { defineChannelPluginEntry } from "openclaw/plugin-sdk/core";
-import { gmailPlugin } from "./src/channel.js";
-import { setGmailRuntime } from "./src/runtime.js";
+import { defineBundledChannelEntry } from "openclaw/plugin-sdk/channel-entry-contract";
 
-export { gmailPlugin } from "./src/channel.js";
-export { setGmailRuntime } from "./src/runtime.js";
-
-export default defineChannelPluginEntry({
+export default defineBundledChannelEntry({
   id: "gmail",
   name: "Gmail",
   description: "Gmail channel plugin",
-  plugin: gmailPlugin as ChannelPlugin,
-  setRuntime: setGmailRuntime,
+  importMetaUrl: import.meta.url,
+  plugin: {
+    specifier: "./src/channel.js",
+    exportName: "gmailPlugin",
+  },
+  runtime: {
+    specifier: "./src/runtime.js",
+    exportName: "setGmailRuntime",
+  },
 });

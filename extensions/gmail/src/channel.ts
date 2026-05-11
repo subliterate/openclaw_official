@@ -248,7 +248,7 @@ export const gmailPlugin: ChannelPlugin<ResolvedGmailAccount, GmailProbe> = {
       }
       ctx.log?.info(`[gmail:${account.accountId}] starting Gmail provider`);
 
-      const { stop } = await monitorGmailProvider({
+      await monitorGmailProvider({
         accountId: account.accountId,
         config: ctx.cfg as CoreConfig,
         abortSignal: ctx.abortSignal,
@@ -261,8 +261,6 @@ export const gmailPlugin: ChannelPlugin<ResolvedGmailAccount, GmailProbe> = {
           });
         },
       });
-
-      return { stop };
     },
   },
 };
