@@ -228,3 +228,6 @@ extensions/**/.openclaw-runtime-deps-stamp.json
 /.opengrep-out/
 /.crabbox-artifacts
 .comux*
+
+# Local debug capture; once contained API keys and was scrubbed via filter-branch 2026-05-11
+/reqout
