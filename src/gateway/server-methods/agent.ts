@@ -1700,6 +1700,7 @@ export const agentHandlers: GatewayRequestHandlers = {
       stopReason: snapshot.stopReason,
       livenessState: snapshot.livenessState,
       yielded: snapshot.yielded,
+      resultText: snapshot.resultText,
     });
   },
 };

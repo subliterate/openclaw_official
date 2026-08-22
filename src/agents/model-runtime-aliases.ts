@@ -17,7 +17,6 @@ type LegacyRuntimeModelProviderAlias = {
 const LEGACY_RUNTIME_MODEL_PROVIDER_ALIASES = [
   { legacyProvider: "codex", provider: "openai", runtime: "codex", cli: false },
   { legacyProvider: "codex-cli", provider: "openai", runtime: "codex-cli", cli: true },
-  { legacyProvider: "claude-cli", provider: "anthropic", runtime: "claude-cli", cli: true },
   {
     legacyProvider: "google-gemini-cli",
     provider: "google",
